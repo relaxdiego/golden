@@ -100,6 +100,7 @@ jobs:
       - run:
           name: Build and publish
           command: |
+            set -ex
             cd container-images
 
             dockerfile="<<parameters.dockerfile>>"
