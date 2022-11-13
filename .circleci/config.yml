@@ -1,0 +1,154 @@
+version: 2.1
+
+orbs:
+  orb-tools: circleci/orb-tools@10.0
+  shellcheck: circleci/shellcheck@2.0
+
+#
+# EXECUTOR DEFINITIONS
+#
+
+executors:
+  python:
+    # https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    # This can be overridden by a job
+    resource_class: medium
+
+    parameters:
+      version:
+        description: >
+          See: https://hub.docker.com/repository/registry-1.docker.io/relaxdiego/golden-tools-python/tags
+        type: string
+        default: "3.10"
+      image_repo:
+        description: >
+          The name of the repo (prepended by its namespace) in Docker Hub.
+        type: string
+        default: "golden-orb/ci-executor-python"
+
+    docker:
+      - image: <<parameters.image_repo>>:<<parameters.version>>
+
+#
+# JOB DEFINITIONS
+#
+
+jobs:
+
+  # ==========================================
+
+  run-orb-unit-tests:
+    parameters:
+      component_path:
+        description: >
+          Direectory path of the component relative to the project root.
+        type: string
+
+    executor:
+      name: python
+
+    steps:
+      - checkout
+      - run:
+          name: Setup test environment
+          command: |
+            cd <<parameters.component_path>>
+            sudo apt-get update -y
+            sudo apt-get install -y \
+              yamllint \
+              shellcheck
+            make setup-test
+      - run:
+          name: Run make test
+          command: |
+            cd <<parameters.component_path>>
+            make test
+      - store_test_results:
+          path: test-results/<<parameters.component_path>>
+      - store_artifacts:
+          path: test-results/<<parameters.component_path>>
+      - persist_to_workspace:
+          root: .
+          paths:
+            - test-results/<<parameters.component_path>>/coverage.xml
+
+  # ==========================================
+
+  build-and-publish-docker-image:
+    docker:
+        # See: More choices <https://circleci.com/developer/images/image/cimg/base>
+      - image: cimg/base:stable-20.04
+    parameters:
+      dockerfile:
+        type: string
+      repo:
+        type: string
+      namespace:
+        description: >
+          The namespace of the image repo
+        type: string
+        default: "golden-orb"
+      tag:
+        type: string
+    steps:
+      - checkout
+      - setup_remote_docker:
+          # Supported versions are listed at:
+          # https://circleci.com/docs/2.0/building-docker-images/#docker-version
+          version: 20.10.18
+          docker_layer_caching: true
+      - run:
+          name: Build and publish
+          command: |
+            cd container-images
+
+            dockerfile="<<parameters.dockerfile>>"
+            namespaced_repo="<<parameters.namespace>>/<<parameters.repo>>"
+            tag="<<parameters.tag>>"
+
+            # Only run the following if the dockerfile changed since the last successful build
+            if git diff --name-only <<pipeline.git.base_revision>> ${CIRCLE_SHA1} | grep ${dockerfile}; then
+              docker login -u "$DOCKER_LOGIN" -p "$DOCKER_PASSWORD"
+              docker build -t "${namespaced_repo}:${tag}" -f "${dockerfile}" .
+              docker push "${namespaced_repo}:${tag}"
+            fi
+
+#
+# PIPELINE DEFINITION
+#
+
+workflows:
+  main:
+    jobs:
+      #
+      # BUILD AND PUBLISH DOCKER EXECUTOR IMAGES
+      #
+      - build-and-publish-docker-image:
+          name: ci-executor-python:<<matrix.tag>>
+          repo: ci-executor-python
+          dockerfile: Dockerfile.ci-executor-python_<<matrix.tag>>
+          context: docker-hub
+          matrix:
+            parameters:
+              tag:
+                - "3.9"
+
+      - build-and-publish-docker-image:
+          name: ci-executor-nodejs:<<matrix.tag>>
+          repo: ci-executor-nodejs
+          dockerfile: Dockerfile.ci-executor-nodejs_<<matrix.tag>>
+          context: docker-hub
+          matrix:
+            parameters:
+              tag:
+                - "16-python3.9"
+
+      - build-and-publish-docker-image:
+          name: ci-executor-jinja2:<<matrix.tag>>
+          repo: ci-executor-jinja2
+          dockerfile: Dockerfile.ci-executor-jinja2_<<matrix.tag>>
+          context: docker-hub
+          matrix:
+            parameters:
+              tag:
+                - "3.0-python3.9"

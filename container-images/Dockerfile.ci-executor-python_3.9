@@ -1,0 +1,14 @@
+FROM cimg/base:stable-20.04
+
+# PYTHON
+RUN sudo apt-get update -y
+RUN sudo apt-get install -y python3.9 python3.9-venv python3-pip
+RUN sudo ln -sf /usr/bin/python3.9 /usr/bin/python3
+RUN sudo ln -sf /usr/bin/python3 /usr/bin/python
+RUN python -m pip install --upgrade pip
+RUN python -m pip install "pipenv==2022.1.8"
+
+# AWS CLI
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+RUN unzip awscliv2.zip && sudo ./aws/install
+RUN rm -rf ./aws awscliv2.zip
