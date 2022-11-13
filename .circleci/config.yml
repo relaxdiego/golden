@@ -111,6 +111,8 @@ jobs:
               docker login -u "$DOCKER_LOGIN" -p "$DOCKER_PASSWORD"
               docker build -t "${namespaced_repo}:${tag}" -f "${dockerfile}" .
               docker push "${namespaced_repo}:${tag}"
+            else
+              echo "$dockerfile did not change since the last successful build. Skipping."
             fi
 
 #
@@ -124,7 +126,7 @@ workflows:
       # BUILD AND PUBLISH DOCKER EXECUTOR IMAGES
       #
       - build-and-publish-docker-image:
-          name: ci-executor-python:<<matrix.tag>>
+          name: Build and publish ci-executor-python:<<matrix.tag>>
           repo: ci-executor-python
           dockerfile: Dockerfile.ci-executor-python_<<matrix.tag>>
           context: docker-hub
@@ -134,7 +136,7 @@ workflows:
                 - "3.9"
 
       - build-and-publish-docker-image:
-          name: ci-executor-nodejs:<<matrix.tag>>
+          name: Build and publish ci-executor-nodejs:<<matrix.tag>>
           repo: ci-executor-nodejs
           dockerfile: Dockerfile.ci-executor-nodejs_<<matrix.tag>>
           context: docker-hub
@@ -144,7 +146,7 @@ workflows:
                 - "16-python3.9"
 
       - build-and-publish-docker-image:
-          name: ci-executor-jinja2:<<matrix.tag>>
+          name: Build and publish ci-executor-jinja2:<<matrix.tag>>
           repo: ci-executor-jinja2
           dockerfile: Dockerfile.ci-executor-jinja2_<<matrix.tag>>
           context: docker-hub
